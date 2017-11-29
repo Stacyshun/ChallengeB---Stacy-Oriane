@@ -9,7 +9,7 @@ output: html_document
 
 # Step 1 :
 
- We choose the random forest techninques blabla 
+ Coucou We choose the random forest techninques blabla 
 
 #Step 2
 
