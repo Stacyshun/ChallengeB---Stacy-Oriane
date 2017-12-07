@@ -1,0 +1,399 @@
+---
+title: "Challenge B"
+author: "Oriane Limouzin et Shun-man-yin Stacy"
+date: "30/11/2017"
+output: html_document
+---
+
+Github profile : 
+Oriane : OrianeL
+Stacy : Stacyshun 
+Project : https://github.com/Stacyshun/ChallengeB---Stacy-Oriane
+
+
+# Task 1B
+
+## Step 1 - Choose a ML technique : non-parametric kernel estimation, random forests, etc. . . Give a brief intuition of how it works
+
+We choose the random forest techninque.
+The randomForest package implements Breiman's random forest algorithm (based on Breiman and Cutler's original Fortran code) for classification and regression. 
+
+"Random forests or random decision forests are an ensemble learning method for classification, regression and other tasks, that operate by constructing a multitude of decision trees at training time and outputting the class that is the mode of the classes (classification) or mean prediction (regression) of the individual trees. Random decision forests correct for decision trees' habit of overfitting to their training set" (Wikipédia). 
+
+So Random Forest is a good technique in case of overfitting. 
+
+
+## Step 2 - Train the chosen technique on the training data. Hint : packages np for non-parametric regressions,randomForest for random forests. Don't use the variable Id as a feature
+
+```{r first, results="hide" }
+library(tidyverse)
+library(np)
+library(readr)
+library(randomForest)
+train <- read_csv("~/rprog/train.csv")
+test <- read_csv("~/rprog/test.csv")
+```
+
+CONCERNING THE TRAINING DATA : 
+First, we erase the column ID (as there is no point at using it as a feature). 
+Then, since variables are not supposed to start with a number in R, and 3 variables were written like that in our data set (1stFlrSF, 2ndFlrSF, 3SsnPorch)-thus generating a error message after-, we change the name of this 3 variables (to FstFlrSF, sndFlSF, TSsnPorch) :
+```{r datatrain1, results="hide" }
+train <- train[,-1]
+
+dput(names(train))
+names(train) <- c("MSSubClass", "MSZoning", "LotFrontage", "LotArea", "Street", 
+                  "Alley", "LotShape", "LandContour", "Utilities", "LotConfig", 
+                  "LandSlope", "Neighborhood", "Condition1", "Condition2", "BldgType", 
+                  "HouseStyle", "OverallQual", "OverallCond", "YearBuilt", "YearRemodAdd", 
+                  "RoofStyle", "RoofMatl", "Exterior1st", "Exterior2nd", "MasVnrType", 
+                  "MasVnrArea", "ExterQual", "ExterCond", "Foundation", "BsmtQual", 
+                  "BsmtCond", "BsmtExposure", "BsmtFinType1", "BsmtFinSF1", "BsmtFinType2", 
+                  "BsmtFinSF2", "BsmtUnfSF", "TotalBsmtSF", "Heating", "HeatingQC", 
+                  "CentralAir", "Electrical", "FstFlrSF", "SndFlrSF", "LowQualFinSF", 
+                  "GrLivArea", "BsmtFullBath", "BsmtHalfBath", "FullBath", "HalfBath", 
+                  "BedroomAbvGr", "KitchenAbvGr", "KitchenQual", "TotRmsAbvGrd", 
+                  "Functional", "Fireplaces", "FireplaceQu", "GarageType", "GarageYrBlt", 
+                  "GarageFinish", "GarageCars", "GarageArea", "GarageQual", "GarageCond", 
+                  "PavedDrive", "WoodDeckSF", "OpenPorchSF", "EnclosedPorch", "TSsnPorch", 
+                  "ScreenPorch", "PoolArea", "PoolQC", "Fence", "MiscFeature", 
+                  "MiscVal", "MoSold", "YrSold", "SaleType", "SaleCondition", "SalePrice")
+
+```
+
+After, we convert character variables into factor :
+```{r datatrain2}
+train<- train%>%mutate_if(is.character,as.factor)
+```
+
+Then, we erase the missing values in our data set (as we saw in ChallengeA):
+```{r datatrain3, results="hide" }
+train %>% summarise_all(.funs = funs(sum(is.na(.)))) %>% gather(key = "feature", value = "missing.observations") %>% filter(missing.observations > 0)
+remove.vars <- train %>% summarise_all(.funs = funs(sum(is.na(.)))) %>% gather(key = "feature", value = "missing.observations") %>% filter(missing.observations > 100) %>% select(feature) %>% unlist
+train <- train %>% select(- one_of(remove.vars))
+train %>% summarise_all(.funs = funs(sum(is.na(.)))) %>% gather(key = "feature", value = "missing.observations") %>% filter(missing.observations > 0)
+train <- train %>% filter(is.na(GarageType) == FALSE, is.na(MasVnrType) == FALSE, is.na(BsmtFinType2) == FALSE, is.na(BsmtExposure) == FALSE, is.na(Electrical) == FALSE)
+anyNA(train)
+```
+
+```{r datatrain4 }
+anyNA(train)
+```
+
+
+CONCERNING THE TEST DATA :
+We follow the exact same steps : erase the ID column, rename the 3 variables, convert character variable to factor, and erase missing value :
+
+```{r datatest, results="hide"}
+test <- test[,-1]
+dput(names(test))
+names(test) <- c("MSSubClass", "MSZoning", "LotFrontage", "LotArea", "Street", 
+                 "Alley", "LotShape", "LandContour", "Utilities", "LotConfig", 
+                 "LandSlope", "Neighborhood", "Condition1", "Condition2", "BldgType", 
+                 "HouseStyle", "OverallQual", "OverallCond", "YearBuilt", "YearRemodAdd", 
+                 "RoofStyle", "RoofMatl", "Exterior1st", "Exterior2nd", "MasVnrType", 
+                 "MasVnrArea", "ExterQual", "ExterCond", "Foundation", "BsmtQual", 
+                 "BsmtCond", "BsmtExposure", "BsmtFinType1", "BsmtFinSF1", "BsmtFinType2", 
+                 "BsmtFinSF2", "BsmtUnfSF", "TotalBsmtSF", "Heating", "HeatingQC", 
+                 "CentralAir", "Electrical", "FstFlrSF", "SndFlrSF", "LowQualFinSF", 
+                 "GrLivArea", "BsmtFullBath", "BsmtHalfBath", "FullBath", "HalfBath", 
+                 "BedroomAbvGr", "KitchenAbvGr", "KitchenQual", "TotRmsAbvGrd", 
+                 "Functional", "Fireplaces", "FireplaceQu", "GarageType", "GarageYrBlt", 
+                 "GarageFinish", "GarageCars", "GarageArea", "GarageQual", "GarageCond", 
+                 "PavedDrive", "WoodDeckSF", "OpenPorchSF", "EnclosedPorch", "TSsnPorch", 
+                 "ScreenPorch", "PoolArea", "PoolQC", "Fence", "MiscFeature", 
+                 "MiscVal", "MoSold", "YrSold", "SaleType", "SaleCondition")
+
+test<- test%>%mutate_if(is.character,as.factor)
+
+test <- na.omit(test)
+anyNA(test)
+```
+
+
+Now we can do the Random Forest regression on the training data : 
+```{r randomforest regression }
+RFreg<-randomForest(SalePrice ~ ., data = train, ntree=500, mtry=5, na.action=na.roughfix)
+RFreg
+summary(RFreg)
+```
+
+
+## Step 3 - Make predictions on the test data, and compare them to the predictions of a linear regression of your choice
+
+We make the predictions on the test data using the Random Forest technique :
+
+```{r randomforest prediction }
+predictRFreg <- predict(RFreg,data=test)
+
+```
+
+We decide to compare it with the predictions of a linear regression using LM :
+
+```{r LM regression, results="hide" }
+LMreg <- lm(SalePrice ~ ., data= train)
+LMreg
+summary(LMreg)
+```
+
+Then, as we did in ChallengeA, we do the same regression, but only with the more significant variables : 
+
+
+```{r LM regression sig }
+LMreg2 <- lm(SalePrice ~ MSZoning + LotArea + Neighborhood  + YearBuilt + OverallQual, data = train)
+```
+
+And we make the predictions on the test data using the LM technique :
+
+```{r LM prediction }
+predictLMreg2 <- predict(LMreg2, data=test)
+
+```
+
+```{r summary predictions }
+summary(predictLMreg2)
+summary(predictRFreg)
+```
+
+By doing the summary, we obtained that the values of the means and the dispersion of the two models are quite close. So it gives us similar predictions. 
+
+To compare the predictions using the two techniques, we plot them : 
+
+```{r prediction plot }
+plot(predictRFreg)
+
+plot(predictLMreg2)
+
+```
+
+If we compare the plots, we can see that the prediction of the rand forest method is more concentrate to the botom and is more variable, while the prediction for LM is concentrate between 1E+05 et 2e+05, so there is less variability in this model.
+
+# Task 2B - Overfitting in Machine Learning (continued)
+
+```{r loading packages, results="hide" }
+
+library(tidyverse)
+library(caret)
+library(np)
+
+```
+
+We took the results from the Challenge A to coninue the challenge B 
+
+```{r taking the results of challenge A to go on for the challenge B}
+
+set.seed(1)
+Nsim <- 150
+b <- c(0,1)
+x0 <- rep(1, Nsim)
+x1 <- rnorm(n = Nsim)
+
+X <- cbind(x0, x1^3)
+y.true <- X %*% b
+
+eps <- rnorm(n = Nsim)
+y <- X %*% b + eps
+
+df <- tbl_df(y[,1]) %>% rename(y = value) %>% bind_cols(tbl_df(x1)) %>% rename(x = value) %>% bind_cols(tbl_df(y.true[,1])) %>% rename(y.true = value)
+
+training.index <- createDataPartition(y = y, times = 1, p = 0.8)
+df <- df %>% mutate(which.data = ifelse(1:n() %in% training.index$Resample1, "training", "test"))
+
+training <- df %>% filter(which.data == "training")
+test <- df %>% filter(which.data == "test")
+
+```
+
+## Step 1 - Estimate a low-flexibility local linear model on the training data.
+
+To do so, we used the command npreg
+```{r estimation of a low-flexibility}
+
+ll.fit.lowflex <- npreg(y ~ x, data = training, method = "ll", bws = 0.5)
+summary(ll.fit.lowflex)
+
+```
+
+## Step 2 - Estimate a high-flexibility local linear model on the training data.
+
+To do so, we used the command npreg
+```{r estimation of a high-flexibility}
+
+ll.fit.highflex <- npreg(y ~ x, data = training, method = "ll", bws = 0.01)
+summary(ll.fit.highflex)
+
+```
+
+## Step 3 - scatterplot of x-y, along with the predictions of ll.fit.lowflex and ll.fit.highflex (training data)
+
+To make the scatterplot, we first made the predictions of ll.fit.lowflex and ll.fit.highflex on the traininf data 
+
+```{r  predictions on the training data,results="hide" }
+pred1<-predict(ll.fit.lowflex, data =training)
+pred1
+
+pred2<-predict(ll.fit.highflex, data=training)
+pred2
+```
+
+```{r  scatterplot predictions only on the training data }
+
+ggplot(training) + geom_point(mapping = aes(x = x, y = y)) + 
+  geom_line(mapping = aes(x = x, y = y.true)) + 
+  geom_line(mapping = aes(x = x, y = pred1), color = "red") + 
+  geom_line(mapping = aes(x = x, y = pred2), color = "blue")
+
+```
+
+## Step 4 - Between the two models, which predictions are more variable? Which predictions have the least bias?
+```{r  explication}
+summary(pred1)
+var(pred1)
+
+summary(pred2)
+var(pred2)
+```
+The high flexibility model fitting the observations very closely while the low flexibility model follows the general shape of the observations (without taking into acount the outliers) and looks "more" like a regular linear regression.
+Even if the mean is almost the same between the two models, the variances are totally different. Indeed, the variance of the high flexibility is way higer than the low flexibility model. 
+Therefore, the most variable model is the high flexibility one. 
+The one with the least bias is the high flexibility because it's closer to the point, while the low flexibility one is smoother. 
+
+## Step 5 - scatterplot of x-y, along with the predictions of ll.fit.lowflex and ll.fit.highflex (test data.) 
+
+To make the scatterplot   we made the predictions of the low-flexibility and the high-flexibilityon on the test data, and plot a scatterplot of x-y along the predictions we obtained. 
+
+
+```{r  predictions on the test data, results="hide"}
+
+pred3<-predict(object=ll.fit.lowflex, newdata =test)
+pred3
+
+pred4<-predict(object=ll.fit.highflex, newdata=test)
+pred4
+```
+
+```{r  scatterplot predictions only on the test data}
+
+ggplot(test) + geom_point(data = test, aes(x, y)) + 
+  geom_line(aes(x = x, y = y.true)) + 
+  geom_line(mapping = aes(x = x, y = pred3), color = "red") + 
+  geom_line(mapping = aes(x = x, y = pred4), color = "blue")
+
+```
+
+## Which predictions are more variable? What happened to the bias of the least biased model?
+
+```{r explication pred3 et 4 }
+summary(pred3)
+var(pred3)
+
+summary(pred4)
+var(pred4)
+
+```
+Again, The high flexibility model is fitting every observations  while the low flexibility model follows the general shape of the observations (without taking into acount the outliers) and looks "more" like a regular linear regression.
+Even if the mean is still close  between the two models, the variances are again significantly different. Indeed, the variance of the high flexibility is way higer than the low flexibility model. 
+Therefore, the most variable model is still the high flexibility one. 
+The one with the least bias is the low flexifibility model because it fit the observations better (smoother than the other one). 
+
+## Step 6 -  We create a vector of bandwidth going from 0.01 to 0.5 with a step of 0.001.
+
+```{r vector (bandwidth from 0.01 to 0.05, results="hide"}
+bw <- seq(0.01, 0.5, by = 0.001)
+bw
+```
+
+## Step 7 - We Estimate a local linear model y ~ x on the training data with each bandwidth.
+
+```{r estimation of a local linear model (training data) }
+
+llbw.fit <- lapply(X = bw, FUN = function(bw) {npreg(y ~ x, data = training, method = "ll", bws = bw)})
+
+```
+
+## Step 8 - We compute for each bandwidth the MSE on the training data.
+
+```{r MSE (training data), results="hide" }
+
+mse.training <- function(fit.model){
+  predictions <- predict(object = fit.model, newdata = training)
+  training %>% mutate(squared.error = (y - predictions)^2) %>% summarize(mse = mean(squared.error))
+}
+mse.training
+mse.train.results <- unlist(lapply(X = llbw.fit, FUN = mse.training))
+mse.train.results
+
+```
+
+## Step 9 - We compute for each bandwidth the MSE on the test data.
+
+```{r MSE (test data), results="hide" }
+
+mse.test <- function(fit.model){
+  predictions <- predict(object = fit.model, newdata = test)
+  test %>% mutate(squared.error = (y - predictions)^2) %>% summarize(mse = mean(squared.error))
+}
+mse.test
+mse.test.results <- unlist(lapply(X = llbw.fit, FUN = mse.test))
+mse.test.results
+
+```
+
+## Step 10 - Draw on the same plot how the MSE on training data, and test data, change when the bandwidth increases. Conclude.
+
+```{r plot MSE }
+
+mse.df <- tbl_df(data.frame(bandwidth = bw, mse.train = mse.train.results, mse.test = mse.test.results))
+mse.df 
+ggplot(mse.df) + 
+  geom_line(mapping = aes(x = bandwidth, y = mse.train), color = "blue") +
+  geom_line(mapping = aes(x = bandwidth, y = mse.test), color = "orange")
+
+```
+As we can see on the graph, for the training data: when the bandwidth increases, the MSE increases too. It increases very sharply at the begining and then constantly. 
+For the test data: when the candwidth increases to 0.0 from 0.1, the MSE drops. Then from 0.1 to 0.2, it decreases slowly. and until 0.5 it increases (concave shape). 
+
+# Task 3B 
+
+## Step 1 - Import the CNIL dataset from the Open Data Portal.
+```{r, results="hide"  }
+library(readr)
+cnil <- read_delim("~/rprog/OpenCNIL_Organismes_avec_CIL_VD_20171204.csv", 
+                      ";", escape_double = FALSE, trim_ws = TRUE)
+
+```
+
+## Step 2 
+
+Selecting the postal codes longer than 4 and placing them into cnil2
+```{r  }
+
+cnil2 <- subset( cnil, nchar(cnil$Code_Postal) > 4,)
+
+```
+
+Among cnil2, selecting the postal codes smaller than 6
+Now, cnil3 contains only the correct postal codes with 5 numbers
+
+```{r  }
+cnil3 <- subset(cnil2, nchar(cnil2$Code_Postal) < 6,)
+
+```
+
+Creating a dataframe which contains only the 2 first numbers of the postal codes
+```{r  }
+cp <- sub ("^(\\d{2}).*$", "\\1", cnil3$Code_Postal);cp2 <- subset(cp, nchar(cp) < 3,)
+
+```
+
+Creating the nice table containing the number of organizations per department
+```{r table  }
+nicetable<-data.frame(table(unlist(cp2)))
+colnames(nicetable)[colnames(nicetable)=="Var1"] <- "Departement";colnames(nicetable)[colnames(nicetable)=="Freq"] <- "Number of organizations"
+print(nicetable)
+
+```
+
+
+
+
+
